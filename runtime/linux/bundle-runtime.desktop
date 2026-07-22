@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Bundle Runtime
+Exec=/usr/lib/bundle-runtime/bundle-runtime-runner %f
+MimeType=application/x-bundle;
+NoDisplay=true
