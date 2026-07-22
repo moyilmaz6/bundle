@@ -21,7 +21,7 @@ func Execute() int {
 
 func NewRootCommand() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "bundle",
+		Use:   "bundl",
 		Short: "Build desktop applications from Go web servers",
 
 		SilenceUsage: true,

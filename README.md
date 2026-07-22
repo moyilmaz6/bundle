@@ -9,23 +9,29 @@ loopback port, waits for it to answer, and opens its UI in a native WebView.
 
 ## Delivery modes
 
-- **Native bundle** (`bundle build <target>`) — a self-contained, target-specific
+- **Native bundle** (`bundl build <target>`) — a self-contained, target-specific
   application (`.app`, a Windows `.zip`, or a Debian `.deb`). It embeds a
   precompiled, platform-specific *core* that manages the server and hosts the
   WebView, so you can cross-package without building native WebView dependencies
   yourself.
-- **Runtime-managed bundle** (`bundle pack <target>`) — a portable `.bundl`
+- **Runtime-managed bundle** (`bundl pack <target>`) — a portable `.bundl`
   directory containing only your server, config, and assets — never a core. The
   separately installed **Bundle Runtime** supplies the platform's core and opens
   `.bundl` packages in place, the way a JRE opens a JAR.
 
+## Install
+
+```sh
+brew install moyilmaz6/tap/bundl
+```
+
 ## Quickstart
 
 ```sh
-bundle init                 # write a bundle.toml template
+bundl init                  # write a bundle.toml template
 # edit bundle.toml, then build your server binary for the target
-bundle build darwin-arm64   # -> ./out/<App>.app
-bundle pack  darwin-arm64   # -> ./out/<App>.bundl
+bundl build darwin-arm64    # -> ./out/<App>.app
+bundl pack  darwin-arm64    # -> ./out/<App>.bundl
 ```
 
 Supported targets (all six of `{darwin,windows,linux}-{amd64,arm64}`):
@@ -35,7 +41,7 @@ Supported targets (all six of `{darwin,windows,linux}-{amd64,arm64}`):
 `bundle.toml` declares app metadata, the prebuilt server binary, the icon, the
 server port (`auto` selects a free loopback port and substitutes `{port}` into
 `runtime_flags` and `webview.url`), window settings, and `shutdown_grace`. Run
-`bundle init` for a fully commented template.
+`bundl init` for a fully commented template.
 
 When the window closes, Bundle stops the server the way any launcher would — a
 standard OS signal, then a hard kill after `shutdown_grace` if it hasn't exited.
@@ -46,7 +52,7 @@ handle (`SIGTERM` on macOS/Linux, `Ctrl+Break` / `os.Interrupt` on Windows).
 
 | Path | What it is |
 | --- | --- |
-| `cmd/bundle` | the `bundle` CLI |
+| `cmd/bundl` | the `bundl` CLI |
 | `cmd/bundle-core` | the embedded core: manages the server + WebView for native bundles |
 | `cmd/bundle-runtime-runner` | opens one `.bundl` package for the Bundle Runtime |
 | `internal/manifest` | `bundle.toml` / runtime config parsing, defaults, validation |

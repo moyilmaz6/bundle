@@ -67,12 +67,12 @@ run = [
 [tasks.build]
 description = "Build the Bundle CLI"
 depends = ["core:darwin-arm64"]
-run = "go build -o bin/bundle ./cmd/bundle"
+run = "go build -o bin/bundl ./cmd/bundl"
 
 [tasks.run]
 description = "Build and run the Bundle CLI"
 depends = ["build"]
-run = "./bin/bundle"
+run = "./bin/bundl"
 
 [tasks.test]
 description = "Run all Go tests"
@@ -130,8 +130,8 @@ run_id="$(gh run list --workflow artifacts.yml --status success --limit 1 --json
 rm -rf out/downloads/bundle-cli
 gh run download "$run_id" --pattern 'bundle-cli' --dir out/downloads
 host="$(go env GOOS)-$(go env GOARCH)"
-src="out/downloads/bundle-cli/$host/bundle"
+src="out/downloads/bundle-cli/$host/bundl"
 mkdir -p bin
-cp "$src" bin/bundle && chmod +x bin/bundle
-echo "installed $host CLI into bin/bundle (all targets under out/downloads/bundle-cli/)"
+cp "$src" bin/bundl && chmod +x bin/bundl
+echo "installed $host CLI into bin/bundl (all targets under out/downloads/bundle-cli/)"
 '''
