@@ -1,0 +1,170 @@
+name: Build artifacts
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: ["main"]
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "runtime/**"
+      - "go.mod"
+      - "go.sum"
+      - "mise.toml"
+      - ".github/workflows/artifacts.yml"
+      - ".github/scripts/**"
+
+jobs:
+  core:
+    name: Core (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-15
+            command: mise run core:darwin-arm64
+          - target: darwin-amd64
+            runner: macos-15
+            command: mise run core:darwin-amd64
+          - target: linux-amd64
+            runner: ubuntu-22.04
+            command: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev && mise run core:linux-amd64
+          - target: linux-arm64
+            runner: ubuntu-22.04-arm
+            command: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev && mise run core:linux-arm64
+          - target: windows-amd64
+            runner: windows-2025
+            command: mkdir -p internal/coreassets/windows-amd64 && CGO_ENABLED=1 go build -ldflags='-H=windowsgui' -o internal/coreassets/windows-amd64/bundle-core.exe ./cmd/bundle-core
+          - target: windows-arm64
+            runner: windows-11-arm
+            command: mkdir -p internal/coreassets/windows-arm64 && CGO_ENABLED=1 go build -ldflags='-H=windowsgui' -o internal/coreassets/windows-arm64/bundle-core.exe ./cmd/bundle-core
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - name: Set up aarch64 cgo toolchain
+        if: matrix.target == 'windows-arm64'
+        shell: bash
+        run: bash .github/scripts/setup-windows-arm64-cc.sh
+      - name: Build core
+        shell: bash
+        run: ${{ matrix.command }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-${{ matrix.target }}
+          path: internal/coreassets/${{ matrix.target }}/bundle-core*
+          retention-days: 7
+
+  cli:
+    needs: core
+    name: CLI
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: core-*
+          path: internal/coreassets
+          merge-multiple: false
+      - name: Place target cores
+        shell: bash
+        run: |
+          for t in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64; do
+            src="internal/coreassets/core-$t"
+            if [ -f "$src/bundle-core.exe" ]; then
+              mv "$src/bundle-core.exe" "internal/coreassets/$t/bundle-core.exe"
+            else
+              mv "$src/bundle-core" "internal/coreassets/$t/bundle-core"
+            fi
+          done
+          rm -rf internal/coreassets/core-*
+      - name: Cross-compile the CLI for all targets
+        shell: bash
+        run: |
+          for t in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64; do
+            os="${t%-*}"; arch="${t#*-}"; ext=""
+            [ "$os" = windows ] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -o "dist/$t/bundle$ext" ./cmd/bundle
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-cli
+          path: dist
+          retention-days: 7
+
+  runtime-macos:
+    name: Runtime (darwin-${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - run: mise run runtime:darwin-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-runtime-darwin-${{ matrix.arch }}
+          path: out/darwin-${{ matrix.arch }}/Bundle Runtime.app
+          retention-days: 7
+
+  runtime-linux:
+    name: Runtime (linux-${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+      - run: mise run runtime:linux-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-runtime-linux-${{ matrix.arch }}
+          path: out/bundle-runtime-linux-${{ matrix.arch }}
+          retention-days: 7
+
+  runtime-windows:
+    name: Runtime (windows-${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - name: Set up aarch64 cgo toolchain
+        if: matrix.arch == 'arm64'
+        shell: bash
+        run: bash .github/scripts/setup-windows-arm64-cc.sh
+      - name: Build runner
+        shell: bash
+        run: mkdir -p runtime-dist && GOARCH=${{ matrix.arch }} go build -ldflags='-H=windowsgui' -o runtime-dist/bundle-runtime-runner.exe ./cmd/bundle-runtime-runner
+      - name: Build launcher
+        shell: cmd
+        run: |
+          for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set VS_PATH=%%i
+          call "%VS_PATH%\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
+          cl /nologo /std:c++20 /EHsc /O2 runtime\windows\BundleRuntimeLauncher.cpp /Fe:runtime-dist\BundleRuntime.exe /link shell32.lib advapi32.lib user32.lib
+          copy runtime\windows\install-association.cmd runtime-dist\install-association.cmd
+          copy runtime\windows\uninstall-association.cmd runtime-dist\uninstall-association.cmd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-runtime-windows-${{ matrix.arch }}
+          path: runtime-dist
+          retention-days: 7
