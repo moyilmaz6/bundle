@@ -1,0 +1,23 @@
+[app]
+name = "Bundle E2E"
+version = "0.1.0"
+id = "com.example.bundle-e2e"
+description = "Local Bundle WebView smoke-test application"
+maintainer = "Bundle <bundle@example.com>"
+icon = "./assets/icon.png"
+
+[server]
+binary = "./bin/e2e-app"
+runtime_flags = ["--port", "{port}"]
+port = "auto"
+
+[webview]
+url = "http://127.0.0.1:{port}/"
+
+[window]
+title = "Bundle E2E"
+width = 900
+height = 600
+
+[output]
+path = "./out"
