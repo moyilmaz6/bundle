@@ -95,3 +95,7 @@ Bundle uses [`mise`](https://mise.jdx.dev/) for tools and tasks — see
   Debian 12 (bookworm), Ubuntu 22.04, and derivatives. Ubuntu 24.04 (noble)
   dropped the 4.0 line; supporting it is a follow-up that requires bumping
   `webview_go` to the 4.1 backend.
+
+## License
+
+Released under the [MIT License](LICENSE).

@@ -18,6 +18,7 @@ class Bundle < Formula
   desc "Package a Go web server and its web UI into a native desktop app"
   homepage "https://github.com/moyilmaz6/bundle"
   version "${ver}"
+  license "MIT"
 
   on_macos do
     on_arm do
