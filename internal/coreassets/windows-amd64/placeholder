@@ -1,0 +1,3 @@
+Placeholder so this directory (and the go:embed in ../assets.go) exists on a
+fresh checkout. The real core is written here as bundle-core by
+`mise run core:windows-amd64` or downloaded from CI, and is gitignored.
