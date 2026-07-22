@@ -1,0 +1,6 @@
+bin/
+out/
+e2e/app/bin/
+e2e/app/out/
+internal/coreassets/*/bundle-core
+internal/coreassets/*/bundle-core.exe

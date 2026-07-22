@@ -1,0 +1,137 @@
+[settings]
+windows_default_inline_shell_args = "bash -c"
+
+[tools]
+go = "1.26.5"
+
+[tasks."core:darwin-arm64"]
+description = "Build the embedded macOS arm64 WebView core"
+run = "mkdir -p internal/coreassets/darwin-arm64 && CGO_ENABLED=1 GOARCH=arm64 go build -o internal/coreassets/darwin-arm64/bundle-core ./cmd/bundle-core"
+
+[tasks."core:darwin-amd64"]
+description = "Build the embedded macOS amd64 WebView core"
+run = "mkdir -p internal/coreassets/darwin-amd64 && CGO_ENABLED=1 GOARCH=amd64 go build -o internal/coreassets/darwin-amd64/bundle-core ./cmd/bundle-core"
+
+[tasks."core:linux-amd64"]
+description = "Build the embedded Linux amd64 WebView core"
+run = "mkdir -p internal/coreassets/linux-amd64 && CGO_ENABLED=1 go build -o internal/coreassets/linux-amd64/bundle-core ./cmd/bundle-core"
+
+[tasks."core:linux-arm64"]
+description = "Build the embedded Linux arm64 WebView core"
+run = "mkdir -p internal/coreassets/linux-arm64 && CGO_ENABLED=1 go build -o internal/coreassets/linux-arm64/bundle-core ./cmd/bundle-core"
+
+[tasks."core:windows-amd64"]
+description = "Build the embedded Windows amd64 WebView core"
+run = "mkdir -p internal/coreassets/windows-amd64 && CGO_ENABLED=1 go build -ldflags='-H=windowsgui' -o internal/coreassets/windows-amd64/bundle-core.exe ./cmd/bundle-core"
+
+[tasks."core:windows-arm64"]
+description = "Build the embedded Windows arm64 WebView core"
+run = "mkdir -p internal/coreassets/windows-arm64 && CGO_ENABLED=1 go build -ldflags='-H=windowsgui' -o internal/coreassets/windows-arm64/bundle-core.exe ./cmd/bundle-core"
+
+[tasks."runtime:darwin-arm64"]
+description = "Build the macOS arm64 Bundle Runtime.app"
+run = [
+  "mkdir -p 'out/darwin-arm64/Bundle Runtime.app/Contents/MacOS' 'out/darwin-arm64/Bundle Runtime.app/Contents/Resources'",
+  "clang++ -std=c++20 -fobjc-arc -Wall -Wextra -Wpedantic -Werror -arch arm64 -Iruntime/launcher/common runtime/launcher/common/launcher.cpp runtime/macos/BundleRuntimeLauncher.mm -framework AppKit -framework Foundation -o 'out/darwin-arm64/Bundle Runtime.app/Contents/MacOS/BundleRuntime'",
+  "CGO_ENABLED=1 GOARCH=arm64 go build -o 'out/darwin-arm64/Bundle Runtime.app/Contents/Resources/bundle-runtime-runner' ./cmd/bundle-runtime-runner",
+  "cp runtime/macos/Info.plist 'out/darwin-arm64/Bundle Runtime.app/Contents/Info.plist'",
+]
+
+[tasks."runtime:darwin-amd64"]
+description = "Build the macOS amd64 Bundle Runtime.app"
+run = [
+  "mkdir -p 'out/darwin-amd64/Bundle Runtime.app/Contents/MacOS' 'out/darwin-amd64/Bundle Runtime.app/Contents/Resources'",
+  "clang++ -std=c++20 -fobjc-arc -Wall -Wextra -Wpedantic -Werror -arch x86_64 -Iruntime/launcher/common runtime/launcher/common/launcher.cpp runtime/macos/BundleRuntimeLauncher.mm -framework AppKit -framework Foundation -o 'out/darwin-amd64/Bundle Runtime.app/Contents/MacOS/BundleRuntime'",
+  "CGO_ENABLED=1 GOARCH=amd64 go build -o 'out/darwin-amd64/Bundle Runtime.app/Contents/Resources/bundle-runtime-runner' ./cmd/bundle-runtime-runner",
+  "cp runtime/macos/Info.plist 'out/darwin-amd64/Bundle Runtime.app/Contents/Info.plist'",
+]
+
+[tasks."runtime:linux-amd64"]
+description = "Build a portable Bundle Runtime directory for Linux amd64"
+run = [
+  "mkdir -p out/bundle-runtime-linux-amd64",
+  "CGO_ENABLED=1 go build -o out/bundle-runtime-linux-amd64/bundle-runtime-runner ./cmd/bundle-runtime-runner",
+  "cp runtime/linux/bundle-runtime.desktop runtime/linux/bundl-mime.xml runtime/linux/install.sh runtime/linux/uninstall.sh out/bundle-runtime-linux-amd64/",
+  "chmod +x out/bundle-runtime-linux-amd64/install.sh out/bundle-runtime-linux-amd64/uninstall.sh",
+]
+
+[tasks."runtime:linux-arm64"]
+description = "Build a portable Bundle Runtime directory for Linux arm64"
+run = [
+  "mkdir -p out/bundle-runtime-linux-arm64",
+  "CGO_ENABLED=1 go build -o out/bundle-runtime-linux-arm64/bundle-runtime-runner ./cmd/bundle-runtime-runner",
+  "cp runtime/linux/bundle-runtime.desktop runtime/linux/bundl-mime.xml runtime/linux/install.sh runtime/linux/uninstall.sh out/bundle-runtime-linux-arm64/",
+  "chmod +x out/bundle-runtime-linux-arm64/install.sh out/bundle-runtime-linux-arm64/uninstall.sh",
+]
+
+[tasks.build]
+description = "Build the Bundle CLI"
+depends = ["core:darwin-arm64"]
+run = "go build -o bin/bundle ./cmd/bundle"
+
+[tasks.run]
+description = "Build and run the Bundle CLI"
+depends = ["build"]
+run = "./bin/bundle"
+
+[tasks.test]
+description = "Run all Go tests"
+depends = ["core:darwin-arm64"]
+run = "go test -race ./..."
+
+[tasks.fmt]
+description = "Format Go source"
+run = "go fmt ./..."
+
+[tasks.check]
+description = "Run repository checks"
+depends = ["test", "runtime:darwin-arm64"]
+run = ["go vet ./...", "git diff --check"]
+
+[tasks."e2e:fixture"]
+description = "Build the local Go web-server fixture"
+run = "cd e2e/app && go build -o bin/e2e-app ."
+
+[tasks."artifacts:download"]
+description = "Download the latest successful Bundle CLI and Runtime artifacts from GitHub Actions"
+run = "gh run download \"$(gh run list --workflow artifacts.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')\" --pattern 'bundle-*' --dir out/downloads"
+
+[tasks."ci:build"]
+description = "Trigger the artifacts.yml workflow on GitHub Actions"
+run = "gh workflow run artifacts.yml && echo 'triggered — watch with: gh run watch'"
+
+[tasks."cores:pull"]
+description = "Fetch the 6 CI-built cores into internal/coreassets (completes the local CLI)"
+run = '''
+set -euo pipefail
+run_id="$(gh run list --workflow artifacts.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+[ -n "$run_id" ] || { echo "no successful artifacts.yml run found" >&2; exit 1; }
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+gh run download "$run_id" --pattern 'core-*' --dir "$tmp"
+for t in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64; do
+  mkdir -p "internal/coreassets/$t"
+  if [ -f "$tmp/core-$t/bundle-core.exe" ]; then
+    cp "$tmp/core-$t/bundle-core.exe" "internal/coreassets/$t/bundle-core.exe"
+  else
+    cp "$tmp/core-$t/bundle-core" "internal/coreassets/$t/bundle-core"
+    chmod +x "internal/coreassets/$t/bundle-core"
+  fi
+done
+echo "cores placed in internal/coreassets/ from run $run_id — now: mise run build"
+'''
+
+[tasks."cli:pull"]
+description = "Download the finished bundle CLI binaries and install the host one into bin/"
+run = '''
+set -euo pipefail
+run_id="$(gh run list --workflow artifacts.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+[ -n "$run_id" ] || { echo "no successful artifacts.yml run found" >&2; exit 1; }
+rm -rf out/downloads/bundle-cli
+gh run download "$run_id" --pattern 'bundle-cli' --dir out/downloads
+host="$(go env GOOS)-$(go env GOARCH)"
+src="out/downloads/bundle-cli/$host/bundle"
+mkdir -p bin
+cp "$src" bin/bundle && chmod +x bin/bundle
+echo "installed $host CLI into bin/bundle (all targets under out/downloads/bundle-cli/)"
+'''
